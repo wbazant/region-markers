@@ -21,6 +21,8 @@ my ($markers_1_in_order, $markers_1_by_name) = read_marker_positions_from_gff($g
 my ($markers_2_in_order, $markers_2_by_name) = read_marker_positions_from_gff($gff_2, $markers_2_to_1s);
 open (my $out_fh_1, ">", $gff_1_out) or die "$!: $gff_1_out";
 open (my $out_fh_2, ">", $gff_2_out) or die "$!: $gff_2_out";
+print $out_fh_1 "# $gff_1 - Regions of at least $min_report_1 bp with markers at most every $threshold_1 bp and of at least $min_report_2 bp in $gff_2 at most every $threshold_2 bp\n";
+print $out_fh_2 "# $gff_2 - Regions of at least $min_report_2 bp with markers at most every $threshold_2 bp and of at least $min_report_1 bp in $gff_1 at most every $threshold_1 bp\n";
 
 for my $contig_1 ( sort keys %{$markers_1_in_order} ){
   for my $contig_2 (sort keys %{$markers_2_in_order} ){
@@ -95,22 +97,26 @@ sub find_regions {
       my @partials_next;
       for my $partial (@partials){
          if ($feature_1->{start} - $partial->{end_1} < $threshold_1){
-            push @partials_next, @partials;
+            push @partials_next, $partial;
          } elsif($partial->{end_1} - $partial->{start_1} > $min_report_1 && $partial->{end_2} - $partial->{start_2} > $min_report_2) {
             
             output_region($out_fh_1, $contig_name_1,
               $partial->{start_1}, $partial->{end_1},
-              sprintf("matching %s: %s-%s" , $contig_name_2, $partial->{start_2}, $partial->{end_2})
+              sprintf("length %s, matching %s: %s-%s, of length %s" ,$partial->{end_1} - $partial->{start_1},  $contig_name_2, $partial->{start_2}, $partial->{end_2},
+                $partial->{end_2} - $partial->{start_2},
+              )
             );
             output_region($out_fh_2, $contig_name_2,
               $partial->{start_2}, $partial->{end_2},
-              sprintf("matching %s: %s-%s" , $contig_name_1, $partial->{start_1}, $partial->{end_1})
+              sprintf("length %s, matching %s: %s-%s, of length %s" , $partial->{end_2} - $partial->{start_2}, $contig_name_1, $partial->{start_1}, $partial->{end_1},
+                $partial->{end_1} - $partial->{start_1},
+              )
             );
          }
       }
       @partials = @partials_next;
       # extend partial matches
-      for my $feature_2 (grep {$_->{contig} eq $contig_name_2 } map {$features_2_by_name->{$_} } @{$markers_1_to_2s->{$feature_1->{name}}//[]} ){
+      for my $feature_2 (grep { $_->{contig} eq $contig_name_2 } map {$features_2_by_name->{$_} // () } @{$markers_1_to_2s->{$feature_1->{name}}//[]} ){
 ### $feature_2
          my ($matching, $other) = part {
             # feature_1 is close enough to all partials that remain
